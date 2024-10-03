@@ -4,6 +4,7 @@
 #include <random>   //for the stable encryption algorithm
 #include <stdio.h>  //for file control
 
+//i pre-emptively apologize for mixing together stuff from C and C++
 
 constexpr unsigned long long int charsize_const{256};           //all the characters possible
 constexpr int ASCIIctrl_const{32};                              //ascii ctrl characters
