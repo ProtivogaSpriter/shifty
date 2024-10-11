@@ -1,8 +1,10 @@
 # depslib dependency file v1.0
-1727968277 source:c:\users\gregory\desktop\scriptbag\code\gitshit\shifty\source.cpp
+1728559245 source:c:\users\gregory\desktop\scriptbag\code\gitshit\shifty\source.cpp
 	<iostream>
 	<string>
 	<sstream>
 	<random>
 	<stdio.h>
+	<string.h>
+	<math.h>
 
