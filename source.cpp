@@ -101,7 +101,7 @@ int arg_ctrl(int argc, char** argv){
                     {
 
                     if(i < argc){
-                        i++;                                //skips over the next arg, as it may be a filepath
+                        i++;                               //skips over the next arg, as it may be a filepath
                         read_file = fopen(argv[i], "r");    //pre-emptively declares next arg as filepath
 
                         if(read_file == nullptr){
@@ -140,7 +140,7 @@ int arg_ctrl(int argc, char** argv){
                     {
 
                     if(i < argc){
-                        i++;                                //skips over the next arg, as it may be a filepath
+                        i++;                               //skips over the next arg, as it may be a filepath
                         write_file = fopen(argv[i], "r");   //pre-emptively declares next arg as filepath
 
                         if(write_file == nullptr){
@@ -188,7 +188,7 @@ int arg_ctrl(int argc, char** argv){
                     {
 
                     if(i < argc){
-                        i++;                                //skips over the next arg, as it may be a filepath
+                        i++;                               //skips over the next arg, as it may be a filepath
                         key_file = fopen(argv[i], "r");     //pre-emptively declares next arg as filepath
 
                         if(key_file == nullptr){
@@ -371,7 +371,11 @@ int data_I_ctrl(bool* FileToggle, std::string *data, char** argv){
                 std::cout << "Not a valid input. Try that again." << std::endl;
                 goto tag_Rfrom_retry;
             }
+
+        std::cout << "\n";
+
         }
+
     }
     else{
         std::cout << "Not a valid input. Try that again." << std::endl;
@@ -411,7 +415,7 @@ int data_O_ctrl(bool* FileToggle, std::string *data, char** argv){
     if(asker == 'C' || asker == 'c'){
         tag_Wto_JIC:
         *(FileToggle) = false;
-        std::cout << "Warning: some characters may fail to print on console, especially when encrypting, decrypting with a bad key or using a custom font." << std::endl;
+        std::cout << "Warning: some characters may fail to print on console, especially when encrypting, decrypting with a bad key or using a custom font.\n" << std::endl;
     }
     else if(asker == 'F' || asker == 'f'){
         *(FileToggle) = true;
@@ -441,6 +445,8 @@ int data_O_ctrl(bool* FileToggle, std::string *data, char** argv){
             }
 
         }
+
+        std::cout << "\n";
 
         write_file = freopen(input.c_str(), "a", write_file);
 
@@ -514,6 +520,8 @@ int key_ctrl(bool* FileToggle, std::string *key, char** argv){
                 goto tag_Rfrom_retry;
             }
         }
+
+        std::cout << "\n";
     }
     else{
         std::cout << "Not a valid input. Try that again." << std::endl;
@@ -546,10 +554,12 @@ int main(int argc, char** argv)
 
 
         //checks whether the args supplied are sufficient to operate
-    if( !((enabled_args[0] == true) || ( ( (enabled_args[1] || enabled_args[2]) && (enabled_args[3] || enabled_args[4]) && (enabled_args[5] || enabled_args[6]) ) == true)) ){
+    if( !((enabled_args[0]) || ( ( (enabled_args[1] || enabled_args[2]) && (enabled_args[3] || enabled_args[4]) && (enabled_args[5] || enabled_args[6]) ))) ){
         std::cout << "Bad usage. Insufficient arguments." << std::endl;
         return 1;
     }
+
+    start:
 
         //asks for source of data
     data_I_ctrl(&Rfrom_File, &data, argv);
@@ -561,11 +571,11 @@ int main(int argc, char** argv)
         while((iasker = fgetc(read_file) )!= EOF){
             data = data + (char)iasker;
         }
-        std::cout << "Data read from file successfully." << std::endl;
     }
     else{               //if con input
         std::cout << "Data to process: ";
         getline(std::cin, data);
+        std::cout << "\n";
     }
 
 
@@ -583,11 +593,11 @@ int main(int argc, char** argv)
         while((iasker = fgetc(key_file) )!= EOF){
             key = key + (char)iasker;
         }
-        std::cout << "Key read from file successfully." << std::endl;
     }
     else{               //if con input
         std::cout << "Key to use: ";
         getline(std::cin, key);
+        std::cout << "\n";
     }
 
 
