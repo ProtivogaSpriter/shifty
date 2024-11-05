@@ -8,13 +8,21 @@
 
 //i pre-emptively apologize for mixing together stuff from C and C++
 
-constexpr unsigned long long int charsize_const{256};           //all the characters possible
-constexpr int ASCIIctrl_const{32};                              //ascii ctrl characters
-long long int actual_chars{charsize_const - ASCIIctrl_const};   //total amt of chars to be used
+constexpr int ASCIIctrl_const{0x00000020};                      //ascii ctrl characters
+
+constexpr unsigned long long int ASCII_charsize_const{0x00000100};    //case ASCII, all the characters possible
+long long int ASCII_actual_chars{ASCII_charsize_const - ASCIIctrl_const};   //case ASCII, total amt of chars to be used
+
+constexpr unsigned long long int UTF16_charsize_const{0xffffffff};    //case UTF-16, all the characters possible
+long long int UTF16_actual_chars{UTF16_charsize_const - ASCIIctrl_const};   //case UTF-16, total amt of chars to be used
 
 unsigned long long int global_seed{0};  //current seed to send to engine
 std::string key{""};                    //key to use as encryption fodder
+std::u16string UTF16_key{u""};          //key to use as encryption fodder, UTF16 (experimental)
 std::mt19937_64* engine{nullptr};       //current instance of RNG
+
+std::string ASCII_data{""};
+std::u16string UTF16_data{u""};
 
 FILE *read_file{nullptr};   //file to read from
 FILE *write_file{nullptr};  //file to write to
@@ -41,22 +49,13 @@ char *all_args[]{       //all args to look at
     "-i",               //determines filepath for input
     "--file-in",        //^
 
-    "-I",               //enables console input (MUTUALLY EXCLUSIVE WITH -i)
-    "--console-in",     //^
-
 
     "-o",               //determines filepath for output
     "--file-out",       //^
 
-    "-O",               //enables console output (MUTUALLY EXCLUSIVE WITH -o)
-    "--console-out",    //^
-
 
     "-k",               //determines filepath for key
     "--file-key",       //^
-
-    "-K",               //enables console for key (MUTUALLY EXCLUSIVE WITH -k)
-    "--console-key"     //^
 };
 
 bool enabled_args[]{    //enabled args
@@ -65,199 +64,172 @@ bool enabled_args[]{    //enabled args
 
     false,              //-i
 
-    false,              //-I
-
     false,              //-o
 
-    false,              //-O
-
-    false,              //-k
-
-    false               //-K
+    false               //-k
 };
 
 constexpr int ARG_TEXT_UI   = 0;
 constexpr int ARG_IN_FILE   = 1;
-constexpr int ARG_IN_CON    = 2;
-constexpr int ARG_OUT_FILE  = 3;
-constexpr int ARG_OUT_CON   = 4;
-constexpr int ARG_KEY_FILE  = 5;
-constexpr int ARG_KEY_CON   = 6;
+constexpr int ARG_OUT_FILE  = 2;
+constexpr int ARG_KEY_FILE  = 3;
+
+constexpr int FILE_CANREAD  = 0;
+constexpr int FILE_CANWRITE = 1;
+
+//checks a file for access (cfa - check for access :3)
+//  WriteRight          0 - only read   1 - can write
+//  filepath            filepath to check
+//  returns:            0 - success     1 - failure
+int file_CFA(bool WriteRight, char* filepath){
+
+    FILE* testfile = nullptr;
+
+    testfile = fopen(filepath, "r");
+
+    if(testfile == nullptr){
+
+        if(WriteRight){
+
+            testfile = fopen(filepath, "a");
+
+            if(testfile == nullptr){
+                return 1;
+            }
+            else{
+                fclose(testfile);
+                remove(filepath);
+                return 0;
+            }
+
+        }
+        else{
+            return 1;
+        }
+
+    }
+
+    fclose(testfile);
+
+    return 0;
+
+}
+
 
 //we call this func at beginning of program to deal with args
 int arg_ctrl(int argc, char** argv){
 
+    bool allfucked = false;
+
     for(int i = 1; i < argc; i++){
 
-        for(int j = 0; j < sizeof(enabled_args) * 2; j++){
+        for(int j = 0; j < sizeof(all_args) / sizeof(all_args[0]); j++){
+
+            int argnum = floor(j / 2);
 
             if(strcmp(argv[i], all_args[j]) == 0){
 
-                int shift_arg = floor((j / 2));  //we do this because there's twice as many entries in all_args as compared to enabled_args
+                if(argnum >= 1 && argnum <= 3){
 
-                switch(shift_arg){
-
-                    case(ARG_IN_FILE):    //-i
-                    {
-
-                    if(i < argc){
-                        i++;                               //skips over the next arg, as it may be a filepath
-                        read_file = fopen(argv[i], "r");    //pre-emptively declares next arg as filepath
-
-                        if(read_file == nullptr){
-                            std::cout << "File accessing error. The file \"" << argv[i] << "\" is an invalid input source." << std::endl;
-                            return 1;
-                        }
-                        else{
-                            fclose(read_file);
-                            file_refs[REF_IN] = i;
-                        }
-
-                    }
-                    else{
-                        std::cout << "Bad usage. -i used, but no filepath specified." << std::endl;
+                    if(i + 1 >= argc){
+                        std::cout << "Argument \"" << argv[i] << "\" has no filepath specified." << std::endl;
                         return 1;
                     }
 
-                    if(enabled_args[ARG_IN_CON]){
-                        std::cout << "Bad usage. Arguments -i and -I are incompatible." << std::endl;
-                        return 1;
-                    }
+                    i++;
 
-                    break;
-                    }
-                    case(ARG_IN_CON):    //-I
-                    {
-
-                    if(enabled_args[ARG_IN_FILE]){
-                        std::cout << "Bad usage. Arguments -i and -I are incompatible." << std::endl;
-                        return 1;
-                    }
-
-                    break;
-                    }
-                    case(ARG_OUT_FILE):    //-o
-                    {
-
-                    if(i < argc){
-                        i++;                               //skips over the next arg, as it may be a filepath
-                        write_file = fopen(argv[i], "r");   //pre-emptively declares next arg as filepath
-
-                        if(write_file == nullptr){
-                            write_file = fopen(argv[i], "a");
-
-                            if(write_file == nullptr){
-                            std::cout << "File accessing error. The file \"" << argv[i] << "\" is an invalid output destination." << std::endl;
-                            return 1;
-                            }
-                            else{
-                                fclose(write_file);
-                                file_refs[REF_OUT] = i;
-                            }
-
-                        }
-                        else{
-                            fclose(write_file);
-                            file_refs[REF_OUT] = i;
-                        }
-
-                    }
-                    else{
-                        std::cout << "Bad usage. -o used, but no filepath specified." << std::endl;
-                        return 1;
-                    }
-
-                    if(enabled_args[ARG_OUT_CON]){
-                        std::cout << "Bad usage. Arguments -o and -O are incompatible." << std::endl;
-                        return 1;
-                    }
-
-                    break;
-                    }
-                    case(ARG_OUT_CON):    //-O
-                    {
-
-                    if(enabled_args[ARG_OUT_FILE]){
-                        std::cout << "Bad usage. Arguments -o and -O are incompatible." << std::endl;
-                        return 1;
-                    }
-
-                    break;
-                    }
-                    case(ARG_KEY_FILE):   //-k
-                    {
-
-                    if(i < argc){
-                        i++;                               //skips over the next arg, as it may be a filepath
-                        key_file = fopen(argv[i], "r");     //pre-emptively declares next arg as filepath
-
-                        if(key_file == nullptr){
-                            std::cout << "File accessing error. The file \"" << argv[i] << "\" is an invalid key source." << std::endl;
-                            return 1;
-                        }
-                        else{
-                            fclose(key_file);
-                            file_refs[REF_KEY] = i;
-                        }
-
-                    }
-                    else{
-                        std::cout << "Bad usage. -k used, but no filepath specified." << std::endl;
-                        return 1;
-                    }
-
-                    if(enabled_args[ARG_KEY_CON]){
-                        std::cout << "Bad usage. Arguments -k and -K are incompatible." << std::endl;
-                        return 1;
-                    }
-
-                    break;
-                    }
-                    case(ARG_KEY_CON):   //-K
-                    {
-
-                    if(enabled_args[ARG_KEY_FILE]){
-                        std::cout << "Bad usage. Arguments -k and -K are incompatible." << std::endl;
-                        return 1;
-                    }
-
-                    break;
-                    }
+                    file_refs[argnum - 1] = i;
 
                 }
 
-                enabled_args[shift_arg] = true;
+                enabled_args[argnum] = true;
                 goto all_good;
 
             }
 
         }
-        std::cout << "Bad usage. Argument \"" << argv[i] << "\" is invalid." << std::endl;
+
+        std::cout << "Argument \"" << argv[i] << "\" is invalid." << std::endl;
         return 1;
 
         all_good:
 
     }
 
+    //check if the arguments provided filepaths are valid.
+    //if TUI is enabled, disregard and skip
+    if(enabled_args[ARG_TEXT_UI] == false){
+
+        for(int i = 0; i < sizeof(file_refs) / sizeof(file_refs[0]); i++){
+
+            bool writeable = i == 1;
+
+            if(file_CFA(writeable, argv[file_refs[i]]) && file_refs[i] != 0){
+
+                allfucked = true;
+                switch(i){
+
+                    case(REF_IN):{
+
+                        std::cout << "Failure to access input file: \"" << argv[file_refs[REF_IN]] << "\". " << std::endl;
+
+                        break;
+                    }
+
+                    case(REF_OUT):{
+
+                        std::cout << "Failure to access output file: \"" << argv[file_refs[REF_OUT]] << "\". " << std::endl;
+
+                        break;
+                    }
+
+                    case(REF_KEY):{
+
+                        std::cout << "Failure to access key file: \"" << argv[file_refs[REF_KEY]] << "\". " << std::endl;
+
+                        break;
+                    }
+
+                }
+
+            }
+
+        }
+
+    }
+
+
+    if(allfucked){
+        return 1;
+    }
+
     return 0;
 
 }
 
+
 //this func controls char under- and over-flows, and shifting in general
-char shift_ctrl(unsigned int offset, unsigned char data, bool DownShift){
+//  offset              by how much the function shifts the character
+//  data                what the original character is
+//  DownShift           0 - downshift,  1 - upshift
+//  SelectCharWidth     0 - ASCII,      1 - UTF16
+char shift_ctrl(unsigned int offset, unsigned char data, bool DownShift, bool SelectCharWidth){
 
     if(data < ASCIIctrl_const){ //make sure control characters are not ever fucked with
         return data;
     }
 
-    int movement = offset % actual_chars;
+    long long int           ACTIVE_actual_chars   = ((SelectCharWidth) ? UTF16_actual_chars     : ASCII_actual_chars);
+    unsigned long long int  ACTIVE_charsize_const = ((SelectCharWidth) ? UTF16_charsize_const   : ASCII_charsize_const);
+
+    int movement = offset % ACTIVE_actual_chars;
 
     if(DownShift){  //downshift
         if(movement == 0){
             return data;
         }
         else if((data - movement) < ASCIIctrl_const){
-            return actual_chars + (data - movement);
+            return ACTIVE_actual_chars + (data - movement);
         }
         else{
             return data - movement;
@@ -267,8 +239,8 @@ char shift_ctrl(unsigned int offset, unsigned char data, bool DownShift){
         if(movement == 0){
             return data;
         }
-        else if(data + movement >= charsize_const){
-            return ASCIIctrl_const + ((data + movement) - charsize_const);
+        else if(data + movement >= ACTIVE_charsize_const){
+            return ASCIIctrl_const + ((data + movement) - ACTIVE_charsize_const);
         }
         else{
             return data + movement;
@@ -304,15 +276,16 @@ void destroy_engine(void){
 //creates an RNG, uses it to generate a series of offsets which are appended to or subtracted from characters in data, destroys the RNG
 void scramble(std::string& data, bool DownShift){
 
+
     create_engine();
     for(int i = 0; i < data.length(); i++){
-        data[i] = shift_ctrl((*engine)(), data[i], DownShift);
+        data[i] = shift_ctrl((*engine)(), data[i], DownShift, 0);
     }
     destroy_engine();
 
 }
 
-
+/*
 //controls input handling if -T is specified
 int data_I_ctrl(bool* FileToggle, std::string *data, char** argv){
 
@@ -502,7 +475,6 @@ int key_ctrl(bool* FileToggle, std::string *key, char** argv){
         key_file = fopen(input.c_str(), "r");
 
         if(key_file == nullptr){
-            tag_Rfrom_acc_fail:
             std::cout << "File failed to access. Try another filepath or enter from console? (F/c): ";
 
             tag_Rfrom_retry:
@@ -533,9 +505,18 @@ int key_ctrl(bool* FileToggle, std::string *key, char** argv){
 }
 
 
-//i feel like this function seldom needs an introduction
-int main(int argc, char** argv)
-{
+//handles I/O when -T is specified
+int handler_tui(int argc, char** argv){
+
+
+
+    return 0;
+
+}
+
+
+//handles I/O when -T is not specified
+int handler_simple(int argc, char** argv){
 
     std::string input{""};
     char asker{' '};
@@ -547,19 +528,6 @@ int main(int argc, char** argv)
     bool K_File{true};
 
     std::string data{""};
-
-    if(arg_ctrl(argc, argv)){
-        return 1;
-    }
-
-
-        //checks whether the args supplied are sufficient to operate
-    if( !((enabled_args[0]) || ( ( (enabled_args[1] || enabled_args[2]) && (enabled_args[3] || enabled_args[4]) && (enabled_args[5] || enabled_args[6]) ))) ){
-        std::cout << "Bad usage. Insufficient arguments." << std::endl;
-        return 1;
-    }
-
-    start:
 
         //asks for source of data
     data_I_ctrl(&Rfrom_File, &data, argv);
@@ -603,7 +571,7 @@ int main(int argc, char** argv)
 
         //asks for direction to shift data
     tag_shift:
-    std::cout << "Upshift or downshift? (U/d): ";
+    std::cout << "Up/down shifting? (U/d): ";
 
     getline(std::cin, input);
     std::stringstream(input) >> asker;
@@ -618,7 +586,6 @@ int main(int argc, char** argv)
         std::cout << "Not a valid input. Try that again." << std::endl;
         goto tag_shift;
     }
-
 
         //shifts the data
     for(int i = 0; i < key.length(); i++){
@@ -639,9 +606,24 @@ int main(int argc, char** argv)
         std::cout << "Data written to file successfully." << std::endl;
     }
     else{           //if con output
-        std::cout << "\nResult of shifting: " << data << std::endl;
+        std::cout << "\nResult of shifting: \n" << data << std::endl;
     }
 
+    return 0;
+
+}
+*/
+
+//i feel like this function seldom needs an introduction
+int main(int argc, char** argv)
+{
+
+    if(arg_ctrl(argc, argv)){
+        std::cout << "Bad usage." << std::endl;
+        return 1;
+    }
+
+    //handler_simple(argc, argv);
 
     return 0;
 }
