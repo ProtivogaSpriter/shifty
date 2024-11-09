@@ -2,13 +2,11 @@
 #include <string>   //for basically everything? kek
 #include <sstream>  //for dealing with some specific input shinanegans
 #include <random>   //for the stable encryption algorithm
-#include <stdio.h>  //for file control
-#include <string.h> //for c-string stuff
-#include <math.h>   //for some specific math
+#include <fstream>  //for file handling
 
-//i pre-emptively apologize for mixing together stuff from C and C++
+#define DEBUGMODE 0 //we switch this to 1 if we want debug output
 
-constexpr int ASCIIctrl_const{0x00000020};                      //ascii ctrl characters
+constexpr int ASCIIctrl_const{0x00000020};                                  //ascii ctrl characters
 
 constexpr unsigned long long int ASCII_charsize_const{0x00000100};          //case ASCII, all the characters possible
 long long int ASCII_actual_chars{ASCII_charsize_const - ASCIIctrl_const};   //case ASCII, total amt of chars to be used
@@ -18,16 +16,14 @@ long long int UTF16_actual_chars{UTF16_charsize_const - ASCIIctrl_const};   //ca
 
 unsigned long long int global_seed{0};  //current seed to send to engine
 std::string key{""};                    //key to use as encryption fodder
-std::u16string UTF16_key{u""};          //key to use as encryption fodder, UTF16 (experimental)
 std::mt19937_64* engine{nullptr};       //current instance of RNG
 
 std::string ASCII_data{""};
-std::u16string UTF16_data{u""};
 
 
-FILE *file_I{nullptr};      //file to read from
-FILE *file_O{nullptr};      //file to write to
-FILE *file_K{nullptr};      //file to get key from
+std::fstream file_I;      //file to read from
+std::fstream file_O;      //file to write to
+std::fstream file_K;      //file to get key from
 
 constexpr int REF_IN    = 0;
 constexpr int REF_OUT   = 1;
@@ -50,7 +46,7 @@ constexpr int ARG_ALLOWASK  = 4;
 constexpr int ARG_SHIFT_UP  = 5;
 constexpr int ARG_SHIFT_DN  = 6;
 
-char *all_args[]{       //all args to look at
+std::string all_args[]{       //all args to look at
 
     "-T",               //enables full text user interface
     "--text-ui",        //^
@@ -104,77 +100,50 @@ constexpr int FILE_CANWRITE = 1;
 //  WriteRight          0 - only read   1 - can write
 //  filepath            filepath to check
 //  returns:            0 - success     1 - failure
-int file_CFA(bool WriteRight, char* filepath){
+int file_CFA(bool WriteRight, std::string filepath){
 
-    FILE* testfile = nullptr;
+    std::fstream testfile;
 
-    testfile = fopen(filepath, "r");
+    testfile.open(filepath, std::ios::in);
 
-    if(testfile == nullptr){
+    if(!testfile.is_open()){
 
         if(WriteRight){
 
-            testfile = fopen(filepath, "a");
+            testfile.open(filepath, std::ios::out);
 
-            if(testfile == nullptr){
+            if(!testfile.is_open()){
+
                 return 1;
+
             }
             else{
-                fclose(testfile);
-                remove(filepath);
+
+                testfile.close();
                 return 0;
+
             }
 
         }
         else{
+
             return 1;
+
         }
 
     }
+    else{
 
-    fclose(testfile);
-
-    return 0;
-
-}
-
-int file_CFA(bool WriteRight, std::string* filepath){
-
-    FILE* testfile = nullptr;
-
-    testfile = fopen((*filepath).c_str(), "r");
-
-    if(testfile == nullptr){
-
-        if(WriteRight){
-
-            testfile = fopen((*filepath).c_str(), "a");
-
-            if(testfile == nullptr){
-                return 1;
-            }
-            else{
-                fclose(testfile);
-                remove((*filepath).c_str());
-                return 0;
-            }
-
-        }
-        else{
-            return 1;
-        }
+        testfile.close();
+        return 0;
 
     }
-
-    fclose(testfile);
-
-    return 0;
 
 }
 
 
 //call this at beginning of program to deal with args
-int arg_ctrl(int argc, char** argv){
+int arg_ctrl(int argc, std::string* argv){
 
     bool allfucked = false;
 
@@ -184,7 +153,7 @@ int arg_ctrl(int argc, char** argv){
 
             int argnum = floor(j / 2);
 
-            if(strcmp(argv[i], all_args[j]) == 0){
+            if(argv[i] == all_args[j]){
 
                 switch(argnum){
 
@@ -242,6 +211,10 @@ int arg_ctrl(int argc, char** argv){
         for(int i = 0; i < sizeof(file_refs) / sizeof(file_refs[0]); i++){
 
             bool writeable = i == 1;
+
+            if(DEBUGMODE){
+                std::cout << "writable considered " << writeable << " for " << i << std::endl;
+            }
 
             //this is really fucking dangerous. if the conditions are reversed, a bad filepath results in a segfault
             if(file_refs[i] > -1 && file_CFA(writeable, argv[file_refs[i]])){
@@ -377,14 +350,14 @@ void run_shifter(std::string& data, int direction){
 //  argv                arguments passed
 //  Asking              0 - not asking  1 - asking
 //  returns:            0 - success     1 - failure
-int basic_I_ctrl(char** argv, bool Asking){
+int basic_I_ctrl(std::string* argv, bool Asking){
 
     std::string input{""};
     char        inchr{32};
 
     if(file_refs[REF_IN] > -1){
 
-        file_I = fopen(argv[file_refs[REF_IN]], "r");
+        file_I.open(argv[file_refs[REF_IN]], std::ios::in);
         return 0;
 
     }
@@ -403,14 +376,14 @@ int basic_I_ctrl(char** argv, bool Asking){
             std::cout << "Enter Input filepath:   ";
             std::getline(std::cin, input);
 
-            if(file_CFA(0, &input)){
+            if(file_CFA(0, input)){
 
                 std::cout << "Filepath \"" << input << "\" cannot be accessed. Try again." << std::endl;
                 goto retry_asking_file;
 
             }
 
-            file_I = fopen(input.c_str(), "r");
+            file_I.open(input, std::ios::in);
             return 0;
 
         }
@@ -435,14 +408,14 @@ int basic_I_ctrl(char** argv, bool Asking){
         std::cout << "Enter Input filepath:   ";
         std::getline(std::cin, input);
 
-        if(file_CFA(0, &input)){
+        if(file_CFA(0, input)){
 
             std::cout << "Filepath \"" << input << "\" cannot be accessed. Try again." << std::endl;
             goto retry_simple;
 
         }
 
-        file_I = fopen(input.c_str(), "r");
+        file_I.open(input, std::ios::in);
 
         return 0;
 
@@ -455,14 +428,14 @@ int basic_I_ctrl(char** argv, bool Asking){
 //  argv                arguments passed
 //  Asking              0 - not asking  1 - asking
 //  returns:            0 - success     1 - failure
-int basic_O_ctrl(char** argv, bool Asking){
+int basic_O_ctrl(std::string* argv, bool Asking){
 
     std::string input{""};
     char        inchr{32};
 
     if(file_refs[REF_OUT] > -1){
 
-        file_O = fopen(argv[file_refs[REF_OUT]], "w");
+        file_O.open(argv[file_refs[REF_OUT]], std::ios::out);
         return 0;
 
     }
@@ -481,14 +454,14 @@ int basic_O_ctrl(char** argv, bool Asking){
             std::cout << "Enter Output filepath:  ";
             std::getline(std::cin, input);
 
-            if(file_CFA(0, &input)){
+            if(file_CFA(0, input)){
 
                 std::cout << "Filepath \"" << input << "\" cannot be accessed. Try again." << std::endl;
                 goto retry_asking_file;
 
             }
 
-            file_O = fopen(input.c_str(), "w");
+            file_O.open(input, std::ios::out);
             return 0;
 
         }
@@ -513,14 +486,14 @@ int basic_O_ctrl(char** argv, bool Asking){
         std::cout << "Enter Output filepath:  ";
         std::getline(std::cin, input);
 
-        if(file_CFA(0, &input)){
+        if(file_CFA(0, input)){
 
             std::cout << "Filepath \"" << input << "\" cannot be accessed. Try again." << std::endl;
             goto retry_simple;
 
         }
 
-        file_O = fopen(input.c_str(), "r");
+        file_O.open(input, std::ios::out);
 
         return 0;
 
@@ -533,14 +506,14 @@ int basic_O_ctrl(char** argv, bool Asking){
 //  argv                arguments passed
 //  Asking              0 - not asking  1 - asking
 //  returns:            0 - success     1 - failure
-int basic_K_ctrl(char** argv, bool Asking){
+int basic_K_ctrl(std::string* argv, bool Asking){
 
     std::string input{""};
     char        inchr{32};
 
     if(file_refs[REF_KEY] > -1){
 
-        file_K = fopen(argv[file_refs[REF_KEY]], "r");
+        file_K.open(argv[file_refs[REF_IN]], std::ios::in);
         return 0;
 
     }
@@ -560,12 +533,12 @@ int basic_K_ctrl(char** argv, bool Asking){
             std::cout << "Enter key filepath:     ";
             std::getline(std::cin, input);
 
-            if(file_CFA(0, &input)){
+            if(file_CFA(0, input)){
                 std::cout << "Filepath \"" << input << "\" cannot be accessed. Try again." << std::endl;
                 goto retry_asking_file;
             }
 
-            file_K = fopen(input.c_str(), "r");
+            file_K.open(input, std::ios::in);
             return 0;
 
         }
@@ -635,6 +608,7 @@ bool basic_D_ctrl(void){
         }
 
         default:{
+            std::cout << "Error: Shift direction determined to be contradictory." << std::endl;
             exit(1);
         }
 
@@ -645,7 +619,7 @@ bool basic_D_ctrl(void){
 
 
 //handles I/O when -T is not specified
-int handler_simple(int argc, char** argv){
+int handler_simple(int argc, std::string* argv){
 
     std::string data        {""};
     std::string input       {""};
@@ -659,12 +633,25 @@ int handler_simple(int argc, char** argv){
 
 
     //input getter
-    if(file_I != nullptr){  //file I
+    if(file_I.is_open()){   //file I
 
         fread = 0;
-        while((fread = fgetc(file_I)) != EOF){
+        while((fread = file_I.get()) && !file_I.eof()){
             data = data + (char)fread;
+
+            if(DEBUGMODE && data.length() % 1000 == 0){
+                std::cout << "Filesize read to be " << data.length() << "." << std::endl;
+                if(data.length() >= 100000){
+                    std::cout << "Error: file appears to be too large." << std::endl;
+                    std::cout << file_I.eof();
+                    return 1;
+                }
+            }
+
         }
+
+        file_I.clear();
+        file_I.seekg(0);
 
     }
     else{                   //con I
@@ -674,9 +661,15 @@ int handler_simple(int argc, char** argv){
 
     }
 
+    if(DEBUGMODE){
+        std::cout << "\n" << data << std::endl;
+    }
+
     if(!enabled_args[ARG_IN_FILE]){
         std::cout << "\n";
     }
+
+
 
 
     //handles output destination
@@ -692,12 +685,14 @@ int handler_simple(int argc, char** argv){
 
 
     //key getter
-    if(file_K != nullptr){  //file K
+    if(file_K.is_open()){   //file K
 
         fread = 0;
-        while((fread = fgetc(file_K)) != EOF){
+        while(fread = file_K.get()){
             key = key + (char)fread;
         }
+        file_K.clear();
+        file_K.seekg(0);
 
     }
     else{                   //con K
@@ -723,10 +718,10 @@ int handler_simple(int argc, char** argv){
 
 
     //output
-    if(file_O != nullptr){  //file O
+    if(file_O.is_open()){   //file O
 
         for(int i = 0; i < data.length(); i++){
-            fputc(data[i], file_O);
+            file_O.put(data[i]);
         }
 
     }
@@ -745,11 +740,11 @@ int handler_simple(int argc, char** argv){
 
 
 //handles I/O when -T is specified
-int handler_tui(int argc, char** argv){
+int handler_tui(int argc, std::string* argv){
 
     //TBD!!!!
 
-    std::cout << "The TUI mode is not yet implemented. Sorry! >_> " << std::endl;
+    std::wcout << L"The TUI mode is not yet implemented. Sorry! >_> " << std::endl;
 
     return 0;
 
@@ -760,19 +755,34 @@ int handler_tui(int argc, char** argv){
 int main(int argc, char** argv)
 {
 
-    if(arg_ctrl(argc, argv)){
+    //_setmode(_fileno(stdout), _O_U16TEXT);
+    //_setmode(_fileno(stdin),  _O_U16TEXT);
+    //_setmode(_fileno(stderr), _O_U16TEXT);
+
+    std::string* argv_str;
+
+    argv_str = new std::string[argc];
+
+    for(int i = 0; i < argc; i++){
+        argv_str[i] = argv[i];
+        if(DEBUGMODE){
+            std::cout << "arg " << i << " " << argv[i] << std::endl;
+        }
+    }
+
+    if(arg_ctrl(argc, argv_str)){
         std::cout << "Bad usage." << std::endl;
         return 1;
     }
 
     if(enabled_args[ARG_TEXT_UI]){
 
-        return handler_tui(argc, argv);
+        return handler_tui(argc, argv_str);
 
     }
     else{
 
-        return handler_simple(argc, argv);
+        return handler_simple(argc, argv_str);
 
     }
 

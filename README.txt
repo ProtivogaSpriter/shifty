@@ -31,4 +31,8 @@ take the rest of the data and append it to the file. You now have a file that pa
 The encryption becomes less cryptographically secure when using over at least 72,057,594,037,927,936 (ASCII) characters in a key, as it causes an integer overflow in the seed used to make RNGs.
 This can make the seed repeat previously taken values, making it possible to use a slightly different password to successfully decrypt data.
 
+A specific edge case bug can be attributed to text file formatting; while Windows systems use CR/LF to declare newlines, Unix uses only LFs.
+This makes any text encrypted on Windows (or using the CR/LF scheme in general) become utterly illegible on Unix past the first line, even if the correct key is used. 
+Encrypt everything in Unix format, for your own sake.
+
 There's another file in this folder, titled README_dshft.dat; it's this file, encoded using a downshift via a key of "key". Try decoding it!
