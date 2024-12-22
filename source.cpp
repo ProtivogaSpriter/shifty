@@ -5,11 +5,28 @@
 #include <random>       //for the stable encryption algorithm
 #include <filesystem>   //for filepaths
 #include <cuchar>       //for narrow to multibyte conversion
+#include <codecvt>      //for more narrow to multibyte conversion
+#include <locale>       //i regret doing unicode you know
 
 #define DEBUGMODE 0 //we switch this to 1 if we want extra debug output
 
+std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> cvt_8to16;
 
-int selected_tstd = 1;
+int cctrl                   = 1;    //judges what is considered a control character (0 - no ctrl; 1 - everything under 32; 2 - everything under 33)
+int skip_ctrl               = 0;    //judges whether the engine skips over control characters ^ without incrementing the engine state
+
+constexpr int CCTRL_NONE    = 0;
+constexpr int CCTRL_NORM    = 1;
+constexpr int CCTRL_EXTR    = 2;
+
+
+int endian                  = 0;
+
+constexpr int ENDIAN_L      = 1;
+constexpr int ENDIAN_B      = 2;
+
+
+int selected_tstd           = 0;
 
 constexpr int TSTD_ASCII    = 0;
 constexpr int TSTD_UTF8     = 1;
@@ -17,7 +34,11 @@ constexpr int TSTD_UTF16    = 2;
 
 std::string all_tstds[]{
 
-    "ASCII",
+    "ASCII",    //-
+                //|
+    "DATA",     // > all the same thing
+                //|
+    "BYTE",     //-
 
     "UTF8",
 
@@ -63,6 +84,7 @@ void devirtualise(void){
 
 
 constexpr   int              ASCIIctrl_const        {0x00000020};                               //ASCII ctrl characters
+constexpr   int              ASCIIctrl_const_space  {0x00000021};                               //ASCII ctrl characters (+space)
 
 constexpr   long long int    ASCII_charsize_const   {0x00000100};                               //case ASCII, all the characters possible
             long long int    ASCII_actual_chars     {ASCII_charsize_const - ASCIIctrl_const};   //case ASCII, total amt of chars to be used
@@ -136,7 +158,7 @@ std::string all_args[]{       //all args to look at
 
 
 
-    "-s",               //determines text standard (ascii, UTF8, UTF16, UTF32)
+    "-s",               //determines text standard (ascii, UTF8, UTF16)
     "--text-standard"   //^
 
 };
@@ -179,13 +201,13 @@ int file_CFA(bool WriteRight, std::u32string filepath_src){
 
     std::fstream testfile;
 
-    testfile.open(filepath, std::ios::in);
+    testfile.open(filepath, std::ios::in | std::ios::binary);
 
     if(!testfile.is_open()){
 
         if(WriteRight){
 
-            testfile.open(filepath, std::ios::out);
+            testfile.open(filepath, std::ios::out | std::ios::binary);
 
             if(!testfile.is_open()){
 
@@ -195,6 +217,7 @@ int file_CFA(bool WriteRight, std::u32string filepath_src){
             else{
 
                 testfile.close();
+                std::filesystem::remove(filepath);
                 return 0;
 
             }
@@ -216,19 +239,22 @@ int file_CFA(bool WriteRight, std::u32string filepath_src){
 
 }
 
+//  WriteRight          0 - only read   1 - can write
+//  filepath            filepath to check
+//  returns:            0 - success     1 - failure
 int file_CFA(bool WriteRight, std::string filepath_src){
 
     std::filesystem::path filepath = filepath_src;
 
     std::fstream testfile;
 
-    testfile.open(filepath, std::ios::in);
+    testfile.open(filepath, std::ios::in | std::ios::binary);
 
     if(!testfile.is_open()){
 
         if(WriteRight){
 
-            testfile.open(filepath, std::ios::out);
+            testfile.open(filepath, std::ios::out | std::ios::binary);
 
             if(!testfile.is_open()){
 
@@ -238,6 +264,7 @@ int file_CFA(bool WriteRight, std::string filepath_src){
             else{
 
                 testfile.close();
+                std::filesystem::remove(filepath);
                 return 0;
 
             }
@@ -261,13 +288,15 @@ int file_CFA(bool WriteRight, std::string filepath_src){
 
 
 //call this at beginning of program to deal with args
+//  argv                arguments passed
+//  returns:            0 - success     1 - failure
 int arg_ctrl(int argc, std::string* argv){
 
     bool allfucked = false;
 
     for(int i = 1; i < argc; i++){
 
-        for(int j = 0; j < sizeof(all_args) / sizeof(all_args[0]); j++){
+        for(unsigned int j = 0; j < sizeof(all_args) / sizeof(all_args[0]); j++){
 
             int argnum = floor(j / 2);
 
@@ -317,7 +346,7 @@ int arg_ctrl(int argc, std::string* argv){
                     if(argnum == ARG_TEXT_STD){
 
                         //for parsing text standard
-                        for(int k = 0; k < argv[i].length(); k++){
+                        for(unsigned int k = 0; k < argv[i].length(); k++){
 
                             //magic numbers declaring lowercase letters in ASCII
                             if((argv[i])[k] > 96 && (argv[i])[k] < 123){
@@ -326,17 +355,22 @@ int arg_ctrl(int argc, std::string* argv){
 
                         }
 
-                        for(int k = 0; k < sizeof(all_tstds) / sizeof(all_tstds[0]); k++){
+                        for(unsigned int k = 0; k < sizeof(all_tstds) / sizeof(all_tstds[0]); k++){
 
                             if(argv[i] == all_tstds[k]){
-                                selected_tstd = k;
+                                if(k < 3){
+                                    selected_tstd = 0;
+                                }
+                                else{
+                                    selected_tstd = k - 2;
+                                }
                                 if(DEBUGMODE){
-                                    std::cout << "Declared text standard: " << all_tstds[k] << std::endl;
+                                    std::cout << "Declared data standard: " << all_tstds[k] << std::endl;
                                 }
                                 goto tstd_all_good;
                             }
                         }
-                        std::cout << "Text standard \"" << argv[i] << "\" not a valid text standard. Try 'ASCII', 'UTF8' or 'UTF16'." << std::endl;
+                        std::cout << "Text standard \"" << argv[i] << "\" not a valid data standard. Try 'ASCII', ('DATA', 'BYTE',) 'UTF8' or 'UTF16'." << std::endl;
                         return 1;
 
                         tstd_all_good:
@@ -373,7 +407,7 @@ int arg_ctrl(int argc, std::string* argv){
     //if TUI is enabled, disregard and skip
     if(enabled_args[ARG_TEXT_UI] == false){
 
-        for(int i = 0; i < sizeof(file_refs) / sizeof(file_refs[0]); i++){
+        for(unsigned int i = 0; i < sizeof(file_refs) / sizeof(file_refs[0]); i++){
 
             bool writeable = i == 1;
 
@@ -430,6 +464,9 @@ int arg_ctrl(int argc, std::string* argv){
 }
 
 
+//turns multibyte character string into utf8-like u32string
+//  indata              multibyte string
+//  returns:            char32_t string
 std::u32string uni_str_parse(std::string* indata){
 
     std::u32string outdata;
@@ -472,7 +509,7 @@ std::u32string uni_str_parse(std::string* indata){
     if(DEBUGMODE){
     std::cout << "Charsize of outdata: " << std::dec << outdata.length() << std::endl;
 
-    for(int i = 0; i < outdata.length(); i++){
+    for(unsigned int i = 0; i < outdata.length(); i++){
         std::cout << std::hex << (int)outdata[i] << std::endl;
     }
     }
@@ -481,6 +518,9 @@ std::u32string uni_str_parse(std::string* indata){
 
 }
 
+//turns utf8-like u32string into multibyte character string
+//  indata              char32_t string
+//  returns:            multibyte string
 std::string nrw_str_parse(std::u32string* indata){
 
     std::string outdata;
@@ -490,14 +530,14 @@ std::string nrw_str_parse(std::u32string* indata){
 
     if(DEBUGMODE){
         std::cout << std::dec << "indata elements, " << (*indata).length() << " length:" << std::endl;
-        for(int i = 0; i < (*indata).length(); i++){
+        for(unsigned int i = 0; i < (*indata).length(); i++){
             std::cout << std::hex << (int)(*indata)[i] << std::endl;
         }
     }
     std::cout << std::dec << std::endl;
 
 
-    for(int i = 0; i < (*indata).length(); i++){
+    for(unsigned int i = 0; i < (*indata).length(); i++){
 
         if(DEBUGMODE){
             std::cout << std::hex << (int)(*indata)[i] << std::endl;
@@ -515,7 +555,7 @@ std::string nrw_str_parse(std::u32string* indata){
         if(DEBUGMODE){
         std::cout << check << " bytes [ ";
         }
-        for(int j = 0; j < check; j++){
+        for(unsigned int j = 0; j < check; j++){
             if(DEBUGMODE){
                 std::cout << std::hex << (short)nchr[j] << " ";
             }
@@ -531,6 +571,99 @@ std::string nrw_str_parse(std::u32string* indata){
 
 }
 
+//experimental, fully self-contained shift function
+std::u32string shift_ctrl_experimental(std::u32string* data, std::u32string* key, bool Direction){
+
+
+    std::u32string datacopy = *data;
+    std::u32string keycopy = *key;
+
+    std::size_t dlen = datacopy.length();
+    std::size_t klen = keycopy.length();
+
+    std::size_t seed = 0;
+
+    std::mt19937_64* engine = nullptr;
+
+    long long int           ACTIVE_actual_chars   = ((selected_tstd > 0) ? UTF8_actual_chars     : ASCII_actual_chars);
+    unsigned long long int  ACTIVE_charsize_const = ((selected_tstd > 0) ? UTF8_charsize_const   : ASCII_charsize_const);
+    long long int           ACTIVE_ctrl_chars     = ((cctrl > 0)         ? ((cctrl > 1) ? ASCIIctrl_const_space : ASCIIctrl_const) : 0);
+
+    if(Direction){      //upshift
+
+        for(int i = 0; i < klen; i++){
+            seed += keycopy[i];
+            engine = new std::mt19937_64;
+            engine->seed(seed);
+            for(int j = 0; i < dlen; j++){
+
+                if(skip_ctrl && datacopy[i] < ACTIVE_ctrl_chars){
+                    continue;
+                }
+                long long int   offset      = (*engine)();
+                if(datacopy[i] < ACTIVE_ctrl_chars){
+                    continue;
+                }
+
+                long long int   equivalent  = datacopy[i];
+                int             movement    = offset % ACTIVE_actual_chars;
+
+                if(movement == 0){
+                    datacopy[i] = (char32_t)equivalent;
+                }
+                else if((unsigned long long int)(equivalent + movement) >= ACTIVE_charsize_const){
+                    datacopy[i] = (char32_t)(ACTIVE_ctrl_chars + ((equivalent + movement) - ACTIVE_charsize_const));
+                }
+                else{
+                    datacopy[i] = (char32_t)(equivalent + movement);
+                }
+
+
+
+            }
+
+        }
+
+    }
+    else{       //downshift
+
+        for(int i = 0; i < klen; i++){
+            seed += keycopy[i];
+            engine = new std::mt19937_64;
+            engine->seed(seed);
+            for(int j = 0; i < dlen; j++){
+
+                if(skip_ctrl && datacopy[i] < ACTIVE_ctrl_chars){
+                    continue;
+                }
+                long long int   offset      = (*engine)();
+                if(datacopy[i] < ACTIVE_ctrl_chars){
+                    continue;
+                }
+
+                long long int   equivalent  = datacopy[i];
+                int             movement    = offset % ACTIVE_actual_chars;
+
+
+                if(movement == 0){
+                    datacopy[i] = (char32_t)equivalent;
+                }
+                else if((equivalent - movement) < ACTIVE_ctrl_chars){
+                    datacopy[i] = (char32_t)(ACTIVE_actual_chars + (equivalent - movement));
+                }
+                else{
+                    datacopy[i] = (char32_t)(equivalent - movement);
+                }
+
+            }
+
+        }
+
+    }
+
+    return datacopy;
+
+}
 
 //controls char under- and over-flows, and shifting in general
 //  offset              by how much the function shifts the character
@@ -558,16 +691,10 @@ char32_t shift_ctrl(unsigned int offset, char32_t data, bool Direction){
         if(movement == 0){
             return (char32_t)char_equivalent;
         }
-        else if(char_equivalent + movement >= ACTIVE_charsize_const){
-            if(ASCIIctrl_const + ((char_equivalent + movement) - ACTIVE_charsize_const) > ACTIVE_charsize_const ){
-                std::cout << "Overflow error. Case U1." << std::endl;;
-            }
+        else if((unsigned long long int)(char_equivalent + movement) >= ACTIVE_charsize_const){
             return (char32_t)(ASCIIctrl_const + ((char_equivalent + movement) - ACTIVE_charsize_const));
         }
         else{
-            if(char_equivalent + movement > ACTIVE_charsize_const ){
-                std::cout << "Overflow error. Case U2.";
-            }
             return (char32_t)(char_equivalent + movement);
         }
     }
@@ -576,21 +703,14 @@ char32_t shift_ctrl(unsigned int offset, char32_t data, bool Direction){
             return (char32_t)char_equivalent;
         }
         else if((char_equivalent - movement) < ASCIIctrl_const){
-            if(ACTIVE_actual_chars + (char_equivalent - movement) < ASCIIctrl_const ){
-                std::cout << "Overflow error. Case D1.";
-            }
             return (char32_t)(ACTIVE_actual_chars + (char_equivalent - movement));
         }
         else{
-            if(char_equivalent - movement < ASCIIctrl_const ){
-                std::cout << "Overflow error. Case D2.";
-            }
             return (char32_t)(char_equivalent - movement);
         }
     }
 
 }
-
 
 //creates an RNG with the current global_seed
 void create_engine(void){
@@ -614,19 +734,24 @@ void destroy_engine(void){
 }
 
 //creates an RNG, uses it to generate a series of offsets which are appended to or subtracted from characters in data, destroys the RNG
+//  data            data string
+//  Direction       0 - down        1 - up
 void scramble(std::u32string& data, bool Direction){
 
     create_engine();
-    for(int i = 0; i < data.length(); i++){
+    for(unsigned int i = 0; i < data.length(); i++){
         data[i] = shift_ctrl((*engine)(), data[i], Direction);
     }
     destroy_engine();
 
 }
 
+//increments global_seed and runs scramble for each element in the key
+//  data            data string
+//  Direction       0 - down        1 - up
 void run_shifter(std::u32string& data, int direction){
 
-    for(int i = 0; i < key.length(); i++){
+    for(unsigned int i = 0; i < key.length(); i++){
         global_seed += key[i];
         scramble(data, direction);
     }
@@ -634,6 +759,9 @@ void run_shifter(std::u32string& data, int direction){
 }
 
 
+//wrapper for unicode formatting function
+//  indata          multibyte string
+//  returns:        char32_t string
 std::u32string tstd_ntu_formatter(std::string indata){
 
     std::u32string outdata = U"";
@@ -645,7 +773,7 @@ std::u32string tstd_ntu_formatter(std::string indata){
     }
     else{                       //ASCII
 
-        for(int i = 0; i < indata.length(); i++){
+        for(unsigned int i = 0; i < indata.length(); i++){
             outdata += +static_cast<unsigned char>(indata[i]);
         }
 
@@ -655,6 +783,9 @@ std::u32string tstd_ntu_formatter(std::string indata){
 
 }
 
+//wrapper for unicode formatting function
+//  indata          char32_t string
+//  returns:        multibyte string
 std::string tstd_utn_formatter(std::u32string indata){
 
     std::string outdata = "";
@@ -666,7 +797,7 @@ std::string tstd_utn_formatter(std::u32string indata){
     }
     else{                       //ASCII
 
-        for(int i = 0; i < indata.length(); i++){
+        for(unsigned int i = 0; i < indata.length(); i++){
             outdata += (char)indata[i];
         }
 
@@ -677,10 +808,12 @@ std::string tstd_utn_formatter(std::u32string indata){
 }
 
 
+//controls text standard
+//  Asking              0 - not asking  1 - asking
+//  returns:            0 - success     1 - failure
 int basic_T_ctrl(bool Asking){
 
     std::string     input{""};
-    char            inchr{32};
 
     if(enabled_args[ARG_TEXT_STD]){
 
@@ -692,10 +825,10 @@ int basic_T_ctrl(bool Asking){
 
         retry_asking_start:
 
-            std::cout << "Text standard to use?   ";
+            std::cout << "Data standard to use?   ";
             std::getline(std::cin, input);
 
-            for(int i = 0; i < input.length(); i++){
+            for(unsigned int i = 0; i < input.length(); i++){
 
                 //magic numbers declaring lowercase letters in ASCII
                 if(input[i] > 96 && input[i] < 123){
@@ -708,7 +841,7 @@ int basic_T_ctrl(bool Asking){
                 std::cout << input << std::endl;
             }
 
-            if      (input == "ASCII"){
+            if      (input == "ASCII" || input == "DATA" || input == "BYTE"){
                 selected_tstd = TSTD_ASCII;
             }
             else if (input == "UTF8"   || input == "UTF-8"){
@@ -718,7 +851,7 @@ int basic_T_ctrl(bool Asking){
                 selected_tstd = TSTD_UTF16;
             }
             else{
-                std::cout << "Incorrect text standard. Try ASCII, UTF8 or UTF16." << std::endl;
+                std::cout << "Incorrect text standard. Try ASCII, (DATA, BYTE,) UTF8 or UTF16." << std::endl;
                 input = "";
                 goto retry_asking_start;
             }
@@ -727,7 +860,6 @@ int basic_T_ctrl(bool Asking){
 
     return 0;
 }
-
 
 //controls input destination
 //  argv                arguments passed
@@ -739,7 +871,7 @@ int basic_I_ctrl(std::string* argv, bool Asking){
 
     if(file_refs[REF_IN] > -1){
 
-        file_I.open(argv[file_refs[REF_IN]], std::ios::in);
+        file_I.open(argv[file_refs[REF_IN]], std::ios::in | std::ios::binary);
         return 0;
 
     }
@@ -755,12 +887,11 @@ int basic_I_ctrl(std::string* argv, bool Asking){
         goto retry;
     }
 
-    file_I.open(input, std::ios::in);
+    file_I.open(input, std::ios::in | std::ios::binary);
 
     return 0;
 
 }
-
 
 //controls output destination
 //  argv                arguments passed
@@ -773,7 +904,7 @@ int basic_O_ctrl(std::string* argv, bool Asking){
 
     if(file_refs[REF_OUT] > -1){
 
-        file_O.open(argv[file_refs[REF_OUT]], std::ios::out);
+        file_O.open(argv[file_refs[REF_OUT]], std::ios::out | std::ios::binary);
         return 0;
 
     }
@@ -799,7 +930,7 @@ int basic_O_ctrl(std::string* argv, bool Asking){
 
             }
 
-            file_O.open(input, std::ios::out);
+            file_O.open(input, std::ios::out | std::ios::binary);
             return 0;
 
         }
@@ -842,14 +973,13 @@ int basic_O_ctrl(std::string* argv, bool Asking){
 
         }
 
-        file_O.open(input, std::ios::out);
+        file_O.open(input, std::ios::out | std::ios::binary);
 
         return 0;
 
     }
 
 }
-
 
 //controls key source destination
 //  argv                arguments passed
@@ -862,7 +992,7 @@ int basic_K_ctrl(std::string* argv, bool Asking){
 
     if(file_refs[REF_KEY] > -1){
 
-        file_K.open(argv[file_refs[REF_KEY]], std::ios::in);
+        file_K.open(argv[file_refs[REF_KEY]], std::ios::in | std::ios::binary);
         return 0;
 
     }
@@ -887,7 +1017,7 @@ int basic_K_ctrl(std::string* argv, bool Asking){
                 goto retry_asking_file;
             }
 
-            file_K.open(input, std::ios::in);
+            file_K.open(input, std::ios::in | std::ios::binary);
             return 0;
 
         }
@@ -913,8 +1043,9 @@ int basic_K_ctrl(std::string* argv, bool Asking){
 
 }
 
-
-bool basic_D_ctrl(void){
+//controls direction
+//  returns:            0 - down        1 - up
+int basic_D_ctrl(void){
 
     std::string     input{""};
     char            inchr{32};
@@ -967,50 +1098,19 @@ bool basic_D_ctrl(void){
 }
 
 //handles I/O when -T is not specified
+//  argc                amount of elements in argv
+//  argv                arguments passed
+//  returns:            0 - success     1 - failure
 int handler_simple(int argc, std::string* argv){
 
     std::u32string      data        {U""};
+    std::size_t         data_size   {0};
     std::string         input       {""};
-    char                inchr       {32};
     int                 fread       {0};
     bool                Direction   {0};    //0 - down, 1 - up
 
     //handles the text standard
     basic_T_ctrl(enabled_args[ARG_ALLOWASK]);
-
-    if(DEBUGMODE){
-
-        std::cout << "DEBUGMODE DIRECT INPUT?:";
-        std::getline(std::cin, input);
-        std::stringstream(input) >> inchr;
-
-        switch(inchr){
-
-        case('Y'):
-        case('y'):{
-            int counter = 0;
-            std::cout << "Enter direct input size:";
-            std::getline(std::cin, input);
-            std::stringstream(input) >> counter;
-            data = U"";
-            for(int i = 0; i < counter; i++){
-                std::cout << "ELEMENT " << i << ": ";
-                std::getline(std::cin, input);
-                std::stringstream(input) >> fread;
-                data += fread;
-            }
-            fread = 0;
-            goto avoid_I_ctrl;
-        }
-
-        default:{
-
-        }
-
-
-        }
-
-    }
 
 
     //handles input destination
@@ -1020,14 +1120,61 @@ int handler_simple(int argc, std::string* argv){
     //input getter
     if(file_I.is_open()){   //file I
 
-        fread = 0;
-        input = "";
-        while((fread = file_I.get()) && !file_I.eof()){
-            input += (char)fread;
-        }
+        file_I.seekg(0, std::ios::end);
+        data_size = file_I.tellg();
+        file_I.seekg(0, std::ios::beg);
 
-        file_I.clear();
-        file_I.seekg(0);
+        //ASCII/UTF8
+        if(selected_tstd != TSTD_UTF16){
+
+            input.assign(data_size, '\0');
+            file_I.read(&input[0], data_size);
+
+        }
+        else{
+
+            char16_t bom = (file_I.get() << 8) + file_I.get();
+
+            std::cout << "Endian autodetect: ";
+
+            switch(bom){
+
+            case(0xfffe):{
+            std::cout << "Little Endian" << std::endl;
+            endian = 1;
+            break;
+            }
+
+            case(0xfeff):{
+            std::cout << "Big Endian" << std::endl;
+            endian = 2;
+            break;
+            }
+
+            default:{
+            std::cout << "Error. Failed to recognize endian type. File is corrupt or not of UTF16 encoding." << std::endl;
+            return 1;
+            }
+
+            }
+
+            data_size -= 2; //forget BOM exists
+
+            std::u16string u16data(data_size / 2, '/0');
+
+            file_I.read((char*)&u16data[0], data_size);
+
+            if(endian == ENDIAN_B){
+                for(unsigned int i = 0; i < u16data.length(); i++){
+                    u16data[i] = (u16data[i] << 8) | (u16data[i] >> 8);
+                    if(DEBUGMODE){
+                        std::cout << (int)u16data[i] << std::endl;
+                    }
+                }
+            }
+
+            input = cvt_8to16.to_bytes(u16data);
+        }
 
         data = tstd_ntu_formatter(input);
 
@@ -1040,14 +1187,11 @@ int handler_simple(int argc, std::string* argv){
     }
 
 
-    avoid_I_ctrl:
-
-    ;   //mingw you utter bitch
-
 
     if(DEBUGMODE){
-        for(int i = 0; i < data.length(); i++){
-            std::cout << std::dec << (long int)data[i] << " " << std::hex << (long int)data[i] << std::endl;
+            std::cout << std::hex << std::endl;
+        for(unsigned int i = 0; i < data.length(); i++){
+            std::cout << (long int)data[i] << std::endl;
         }
     }
 
@@ -1077,12 +1221,8 @@ int handler_simple(int argc, std::string* argv){
         while((fread = file_K.get()) && !file_K.eof()){
                 input += (char)fread;
         }
-        file_K.clear();
-        file_K.seekg(0);
 
         key = tstd_ntu_formatter(input);
-
-        input = "";
 
     }
     else{                   //con K
@@ -1110,10 +1250,33 @@ int handler_simple(int argc, std::string* argv){
     if(file_O.is_open()){   //file O
 
         input = tstd_utn_formatter(data);
-        for(int i = 0; i < input.length(); i++){
-            file_O.put(input[i]);
+
+        if(selected_tstd != TSTD_UTF16){
+
+            for(int i = 0; i < input.length(); i++){
+                file_O.put(input[i]);
+            }
+
         }
-        input = "";
+        else{
+
+            std::u16string u16data = cvt_8to16.from_bytes(input);
+
+            if(endian == ENDIAN_L){
+                file_O.put(0xff);
+                file_O.put(0xfe);
+            }
+            else{
+                file_O.put(0xfe);
+                file_O.put(0xff);
+                for(unsigned int i = 0; i < data_size; i++){
+                    u16data[i] = (u16data[i] << 8) | (u16data[i] >> 8);
+                }
+            }
+
+            file_O.write((char*)&u16data[0], u16data.length() * 2);
+
+        }
 
     }
     else{                   //con O
@@ -1123,7 +1286,7 @@ int handler_simple(int argc, std::string* argv){
         #if defined (_WIN32)
         devirtualise();
         #endif
-        for(int i = 0; i < data.length(); i++){
+        for(unsigned int i = 0; i < data.length(); i++){
             std::cout << (char)data[i];
         }
         #if defined (_WIN32)
@@ -1134,9 +1297,9 @@ int handler_simple(int argc, std::string* argv){
 
     if(DEBUGMODE){
 
-        std::cout << "\n";
-        for(int i = 0; i < input.length(); i++){
-            std::cout << std::dec << (short)input[i] << std::endl;
+        std::cout << std::hex << "\n";
+        for(unsigned int i = 0; i < input.length(); i++){
+            std::cout << +static_cast<unsigned char>(input[i]) << std::endl;
         }
 
     }
@@ -1148,6 +1311,9 @@ int handler_simple(int argc, std::string* argv){
 
 
 //handles I/O when -T is specified
+//  argc                amount of elements in argv
+//  argv                arguments passed
+//  returns:            0 - success     1 - failure
 int handler_tui(int argc, std::string* argv){
 
     //TBD!!!!
@@ -1170,16 +1336,12 @@ int main(int argc, char** argv)
     std::string* argv_str;
     argv_str = new std::string[argc];
 
-    int* argsize;
-    argsize = new int[argc];
+    int* argsize = new int[argc];
 
     char reader;
 
     for(int i = 0; i < argc; i++){
         argsize[i] = 0;
-    }
-
-    for(int i = 0; i < argc; i++){
         reader = 32;
         while(reader != 0){
             argsize[i]++;

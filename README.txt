@@ -1,10 +1,10 @@
 SHIFTY
 by deltaHzdelta a.k.a Gasmasked
 
-This is a demo for my enigma-like text encryption software, SHIFTY.
+This is a demo for my enigma-like encryption software, SHIFTY.
 
-When encrypted with any key, any text will become illegible and impossible to read.
-The only way to access the original contents of the text is to reverse-shift the text with the exact same key and RNG config.
+When encrypted with any key, any data will become illegible and impossible to read.
+The only way to access the original contents of the data is to reverse-shift the data with the exact same key and RNG config.
 
 ===
 Features, implemented:
@@ -13,12 +13,22 @@ The software supports I/O with both console and filesystem, although I personall
 
 The software can work with inputs of data and keys of arbitrary length, guaranteeing a possible 225^72,057,594,037,927,936 (so, a lot of) cryptographic sequences (in 1-byte encodings).
 
+The software supports ASCII, UTF8, UTF16BE and UTF16LE encodings.
+Warning: using this software with any Unicode standard will massively increase filesize due to the encryption algorithm. 
+You can use ASCII mode on UTF8/UTF16 files to keep their original size, however that may result in invalid byte sequences.
+
+The software can encrypt any file - however, be sure to use the ASCII encoding for such purposes. 
+You can also use DATA or BYTE when declaring the standard for this, they're the same thing.
+
 ===
 Features, planned:
 
-The software currently only supports ASCII characters, or character sets within the 1-byte range. This will be made customisable, allowing for characters of Unicode format.
-
 The software currently supports only one RNG config, which will be made partly customisable later.
+
+The software currently only supports rudimentary command-line functionality. A full TUI will be made later.
+
+The software currently ignores control characters, but increments the random number engine used in encryption per each such character regardless. 
+Both disabling control character ignore and stopping the engine from incrementing under the control character limit will be made into options later.
 
 ===
 Interesting applications and software limits:
