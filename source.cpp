@@ -851,7 +851,7 @@ int basic_T_ctrl(bool Asking){
                 selected_tstd = TSTD_UTF16;
             }
             else{
-                std::cout << "Incorrect text standard. Try ASCII, (DATA, BYTE,) UTF8 or UTF16." << std::endl;
+                std::cout << "Incorrect data standard. Try ASCII, (DATA, BYTE,) UTF8 or UTF16." << std::endl;
                 input = "";
                 goto retry_asking_start;
             }
