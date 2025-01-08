@@ -882,7 +882,7 @@ int basic_I_ctrl(std::string* argv, bool Asking){
     std::cout << "Enter Input filepath:   ";
     std::getline(std::cin, input);
 
-    if(file_CFA(0, input)){
+    if(file_CFA(FILE_CANREAD, input)){
         std::cout << "Filepath \"" << input << "\" cannot be accessed. Try again." << std::endl;
         goto retry;
     }
@@ -923,7 +923,7 @@ int basic_O_ctrl(std::string* argv, bool Asking){
             std::cout << "Enter Output filepath:  ";
             std::getline(std::cin, input);
 
-            if(file_CFA(1, input)){
+            if(file_CFA(FILE_CANWRITE, input)){
 
                 std::cout << "Filepath \"" << input << "\" cannot be accessed. Try again." << std::endl;
                 goto retry_asking_file;
@@ -966,7 +966,7 @@ int basic_O_ctrl(std::string* argv, bool Asking){
         std::cout << "Enter Output filepath:  ";
         std::getline(std::cin, input);
 
-        if(file_CFA(0, input)){
+        if(file_CFA(FILE_CANWRITE, input)){
 
             std::cout << "Filepath \"" << input << "\" cannot be accessed. Try again." << std::endl;
             goto retry_simple;
@@ -1012,7 +1012,7 @@ int basic_K_ctrl(std::string* argv, bool Asking){
             std::cout << "Enter key filepath:     ";
             std::getline(std::cin, input);
 
-            if(file_CFA(0, input)){
+            if(file_CFA(FILE_CANREAD, input)){
                 std::cout << "Filepath \"" << input << "\" cannot be accessed. Try again." << std::endl;
                 goto retry_asking_file;
             }
