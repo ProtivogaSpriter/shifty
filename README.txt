@@ -1,7 +1,7 @@
 SHIFTY
 by deltaHzdelta a.k.a Gasmasked
 
-This is a demo for my enigma-like encryption software, SHIFTY.
+This is a demo for my encryption software, SHIFTY.
 
 When encrypted with any key, any data will become illegible and impossible to read.
 The only way to access the original contents of the data is to reverse-shift the data with the exact same key and RNG config.
@@ -19,6 +19,8 @@ You can use ASCII mode on UTF8/UTF16 files to keep their original size, however 
 
 The software can encrypt any file - however, be sure to use the ASCII encoding for such purposes. 
 You can also use DATA or BYTE when declaring the standard for this, they're the same thing.
+
+(to be completely honest, utf8/16 encodings are silly and meaningless. they're more of a torture i imposed on myself than an actual feature here. don't use them.)
 
 ===
 Features, planned:
@@ -40,6 +42,7 @@ take the rest of the data and append it to the file. You now have a file that pa
 
 The encryption becomes less cryptographically secure when using over at least 72,057,594,037,927,936 (ASCII) characters in a key, as it causes an integer overflow in the seed used to make RNGs.
 This can make the seed repeat previously taken values, making it possible to use a slightly different password to successfully decrypt data.
+(actually, this would not actually naturally occur ever, because it would require 72 petabytes of ram to store the key.)
 
 A specific edge case bug can be attributed to text file formatting; while Windows systems use CR/LF to declare newlines, Unix uses only LFs.
 This makes any text encrypted on Windows (or using the CR/LF scheme in general) become utterly illegible on Unix past the first line, even if the correct key is used. 

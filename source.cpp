@@ -117,6 +117,20 @@ int file_refs[]{        //positions of filepaths in argv
 
 };
 
+const char* HELP_TEXT = \
+"Usage: shifty [arguments] [[file arguments] file]\n\
+  arguments:\n\
+  -h, --help		print this text\n\n\
+  -T, --text-ui 	enable full tui\n\n\
+  -A, --allow-asking	allow the program to ask for input\n\n\
+  -U, --up		select upshift\n\
+  -D, --down		select downshift\n\n\
+  file arguments:\n\
+  -i, --file-in		input filepath\n\
+  -o, --file-out	output filepath\n\
+  -k, --file-key	key filepath\n\n\
+Report bugs to suck my cock.";
+
 
 constexpr int ARG_TEXT_UI   = 0;
 constexpr int ARG_IN_FILE   = 1;
@@ -126,6 +140,7 @@ constexpr int ARG_ALLOWASK  = 4;
 constexpr int ARG_SHIFT_UP  = 5;
 constexpr int ARG_SHIFT_DN  = 6;
 constexpr int ARG_TEXT_STD  = 7;
+constexpr int ARG_HELP	    = 8;
 
 std::string all_args[]{       //all args to look at
 
@@ -159,7 +174,10 @@ std::string all_args[]{       //all args to look at
 
 
     "-s",               //determines text standard (ascii, UTF8, UTF16)
-    "--text-standard"   //^
+    "--text-standard",  //^
+
+    "-h",		//prints a help screen
+    "--help"		//^
 
 };
 
@@ -183,7 +201,9 @@ bool enabled_args[]{    //enabled args
     false,              //-D
 
 
-    false               //-s
+    false,              //-s
+
+    false,		//-h
 
 };
 
@@ -303,6 +323,11 @@ int arg_ctrl(int argc, std::string* argv){
             if(argv[i] == all_args[j]){
 
                 switch(argnum){
+
+		case(ARG_HELP):{
+		    std::cout << HELP_TEXT << std::endl;
+		    exit(0);
+		}
 
                 case(ARG_SHIFT_UP):{
 
@@ -1309,6 +1334,9 @@ int handler_simple(int argc, std::string* argv){
 
 }
 
+void render_selection(std::string* entries, int select, int depth){
+
+}
 
 //handles I/O when -T is specified
 //  argc                amount of elements in argv
@@ -1316,9 +1344,50 @@ int handler_simple(int argc, std::string* argv){
 //  returns:            0 - success     1 - failure
 int handler_tui(int argc, std::string* argv){
 
-    //TBD!!!!
+    std::string entries[] = {
+	"quit",				//<-- exits program
+	"misc. settings",		//<-- misc settings (term color, default settings)
+	"key settings",			//<-- literal key/file key/multikey settings
+	"RNG engine settings",		//<-- RNG engine for encoding settings
+	"in/out settings",		//<-- in-out settings, data format handling
+	"shift"				//<-- shifts data
+	};
+    int select[3] = {0, 0, 0};
+    int depth = 0;
+    int entries_len = sizeof(entries);
 
-    std::cout << "The TUI mode is not yet implemented. Sorry! >_> " << std::endl;
+    //entries_0[] doesn't exist cuz it's just a button kek
+    
+    std::string entries_1[] = {		//<-- misc settings
+	"color",
+	"default settings",
+	"input echo"
+	};
+
+    std::string entries_2[] = {		//<-- key settings
+	"multikey",
+	"key sources"
+    	};
+
+    std::string entries_3[] = {		//<-- RNG engine settings
+	"something idk man"
+	};
+
+    std::string entries_4[] = {		//<--in/out settings
+	"in sources",
+	"out sources",
+	"in data type",
+	"out data type"
+	};
+   
+    //entries_5[] doesn't exist for the same reason entries_0[] doesn't, it's just a button
+
+    while(true){
+	render_selection(entries, select[depth], depth);
+
+	//getch(); //IMPLEMENT LATER
+    }
+
 
     return 0;
 
